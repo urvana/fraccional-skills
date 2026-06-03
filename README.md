@@ -14,6 +14,9 @@ usuario.
 npx skills add urvana/fraccional-skills --agent claude-code -y
 ```
 
+Página web con instrucciones (humanos + agentes): https://www.fraccional.cl/agente
+(versión markdown: https://www.fraccional.cl/agente.md)
+
 Luego, en Claude Code, pídele cosas como:
 
 - "inicia sesión en Fraccional"

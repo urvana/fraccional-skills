@@ -116,14 +116,14 @@ unset INPUT HASH
 Para quien prefiere autenticarse en el navegador (reusa su sesión web / OAuth, sin escribir email
 ni código). Requiere que la página `/cli` esté desplegada.
 
-1. Abre **https://www.fraccional.cl/cli** (`open` en macOS).
+1. Abre **https://www.fraccional.cl/app/cli** (`open` en macOS).
 2. El usuario inicia sesión (o ya lo está) y pulsa **Generar código**. La página muestra un
    **código** (y un enlace de respaldo) + su email.
 3. Pega ese código (o el enlace) en el **Paso 2** de arriba — el bloque detecta el tipo solo.
    Se guarda una sesión **independiente** (no cierra la sesión web).
 
 ```bash
-open "https://www.fraccional.cl/cli" 2>/dev/null || echo "Abre https://www.fraccional.cl/cli en tu navegador"
+open "https://www.fraccional.cl/app/cli" 2>/dev/null || echo "Abre https://www.fraccional.cl/app/cli en tu navegador"
 ```
 
 ---
