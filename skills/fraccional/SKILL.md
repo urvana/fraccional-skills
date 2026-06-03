@@ -69,35 +69,46 @@ El correo trae un **código de 6 dígitos** o un **enlace mágico**. Sirven ambo
 
 ### Paso 2 — verificar y guardar la sesión
 
-Pide al usuario el código (o que pegue el enlace completo del correo).
+Pide al usuario el código (o que pegue el enlace completo del correo). Este mismo bloque sirve
+para el código del email, el código de `/cli`, y los enlaces mágicos: prueba las variantes de
+`type` hasta que una funcione.
 
 ```bash
 SUPABASE_URL="https://api.fraccional.app"
 KEY="sb_publishable_pthBDDoTGZc7PxwqrIHn1Q_-wZ_ZY6c"
 SESSION="$HOME/.fraccional/session.json"
 EMAIL="tucorreo@ejemplo.com"
-INPUT="123456"   # <-- código de 6 dígitos, O el enlace completo del correo
-
-# Acepta código (type=email) o enlace mágico (extrae token, type=magiclink)
-if printf '%s' "$INPUT" | grep -q '://'; then
-  TOKEN=$(printf '%s' "$INPUT" | sed -n 's/.*[?&]token=\([^&]*\).*/\1/p'); TYPE="magiclink"
-else
-  TOKEN="$INPUT"; TYPE="email"
-fi
+INPUT="123456"   # <-- código de 6 dígitos, O el enlace completo (correo / página /cli)
 
 mkdir -p "$(dirname "$SESSION")"
-resp=$(curl -sS -X POST "$SUPABASE_URL/auth/v1/verify" \
-  -H "apikey: $KEY" -H "content-type: application/json" \
-  -d "{\"type\":\"$TYPE\",\"email\":\"$EMAIL\",\"token\":\"$TOKEN\"}")
-printf '%s' "$resp" | jq '{access_token, refresh_token, expires_at, email: .user.email}' > "$SESSION"
-chmod 600 "$SESSION"
-if [ -n "$(jq -r '.access_token // empty' "$SESSION")" ]; then
+
+# Prueba un cuerpo de verificación; si trae access_token lo guarda y retorna 0.
+verify_try() {
+  local resp; resp=$(curl -sS -X POST "$SUPABASE_URL/auth/v1/verify" \
+    -H "apikey: $KEY" -H "content-type: application/json" -d "$1")
+  if printf '%s' "$resp" | jq -e 'has("access_token") and .access_token != null' >/dev/null 2>&1; then
+    printf '%s' "$resp" | jq '{access_token, refresh_token, expires_at, email: .user.email}' > "$SESSION"
+    chmod 600 "$SESSION"; return 0
+  fi
+  return 1
+}
+
+if printf '%s' "$INPUT" | grep -q '://'; then
+  HASH=$(printf '%s' "$INPUT" | sed -n 's/.*[?&]token[=]\([^&]*\).*/\1/p')
+  verify_try "{\"type\":\"magiclink\",\"token_hash\":\"$HASH\"}" \
+    || verify_try "{\"type\":\"email\",\"token_hash\":\"$HASH\"}"
+else
+  verify_try "{\"type\":\"email\",\"email\":\"$EMAIL\",\"token\":\"$INPUT\"}" \
+    || verify_try "{\"type\":\"magiclink\",\"email\":\"$EMAIL\",\"token\":\"$INPUT\"}"
+fi
+
+if [ -n "$(jq -r '.access_token // empty' "$SESSION" 2>/dev/null)" ]; then
   echo "✓ Sesión iniciada como $(jq -r '.email' "$SESSION")"
 else
   rm -f "$SESSION"
-  echo "✗ Falló: $(printf '%s' "$resp" | jq -r '.error_description // .msg // .message // "error desconocido"')"
+  echo "✗ No se pudo verificar. Revisa el código/enlace o reenvía el código (Paso 1)."
 fi
-unset resp TOKEN INPUT
+unset INPUT HASH
 ```
 
 ## Login por navegador (paste-code, tipo `/login`)
@@ -106,9 +117,10 @@ Para quien prefiere autenticarse en el navegador (reusa su sesión web / OAuth, 
 ni código). Requiere que la página `/cli` esté desplegada.
 
 1. Abre **https://www.fraccional.cl/cli** (`open` en macOS).
-2. El usuario inicia sesión (o ya lo está). La página muestra un **código** + su email.
-3. Pega ese código en el **Paso 2** de arriba (es un código `email`). Se guarda una sesión
-   **independiente** (no cierra la sesión web).
+2. El usuario inicia sesión (o ya lo está) y pulsa **Generar código**. La página muestra un
+   **código** (y un enlace de respaldo) + su email.
+3. Pega ese código (o el enlace) en el **Paso 2** de arriba — el bloque detecta el tipo solo.
+   Se guarda una sesión **independiente** (no cierra la sesión web).
 
 ```bash
 open "https://www.fraccional.cl/cli" 2>/dev/null || echo "Abre https://www.fraccional.cl/cli en tu navegador"
