@@ -27,7 +27,7 @@ en el sitio web — **no** es un secreto). La sesión sí es secreta y va en `SE
 
 ```bash
 SUPABASE_URL="https://api.fraccional.app"
-KEY="sb_publishable_pthBDDoTGZc7PxwqrIHn1Q_-wZ_ZY6c"
+KEY="sb_publishable_zsc5qocAVfPLJnD9IOHrpw_mtUlCg-7"
 SESSION="$HOME/.fraccional/session.json"
 ```
 
@@ -74,7 +74,7 @@ crear cuentas nuevas):
 
 ```bash
 SUPABASE_URL="https://api.fraccional.app"
-KEY="sb_publishable_pthBDDoTGZc7PxwqrIHn1Q_-wZ_ZY6c"
+KEY="sb_publishable_zsc5qocAVfPLJnD9IOHrpw_mtUlCg-7"
 EMAIL="tucorreo@ejemplo.com"   # <-- pídeselo al usuario
 
 curl -sS -X POST "$SUPABASE_URL/auth/v1/otp" \
@@ -95,7 +95,7 @@ funcione.
 
 ```bash
 SUPABASE_URL="https://api.fraccional.app"
-KEY="sb_publishable_pthBDDoTGZc7PxwqrIHn1Q_-wZ_ZY6c"
+KEY="sb_publishable_zsc5qocAVfPLJnD9IOHrpw_mtUlCg-7"
 SESSION="$HOME/.fraccional/session.json"
 EMAIL="tucorreo@ejemplo.com"
 INPUT="123456"   # <-- código de 6 dígitos, O el enlace completo (correo / página /cli)
@@ -140,7 +140,7 @@ y **persiste el nuevo refresh_token** (Supabase lo rota en cada uso).
 
 ```bash
 SUPABASE_URL="https://api.fraccional.app"
-KEY="sb_publishable_pthBDDoTGZc7PxwqrIHn1Q_-wZ_ZY6c"
+KEY="sb_publishable_zsc5qocAVfPLJnD9IOHrpw_mtUlCg-7"
 SESSION="$HOME/.fraccional/session.json"
 
 [ -f "$SESSION" ] || { echo "No hay sesión. Corre el login primero."; exit 1; }
@@ -171,7 +171,7 @@ de refrescar.)
 
 ```bash
 SUPABASE_URL="https://api.fraccional.app"
-KEY="sb_publishable_pthBDDoTGZc7PxwqrIHn1Q_-wZ_ZY6c"
+KEY="sb_publishable_zsc5qocAVfPLJnD9IOHrpw_mtUlCg-7"
 SESSION="$HOME/.fraccional/session.json"
 TOKEN=$(jq -r '.access_token' "$SESSION")
 
@@ -201,7 +201,7 @@ La RLS scopea automáticamente "lo tuyo", pero para recursos del usuario **prefi
 | Resumen portafolio por moneda | `profile_portfolio_summary_by_currency?select=*` |
 | Mis cuentas bancarias | `rpc/viewer_profile_bank_accounts?select=*` *(POST, body `{}`)* |
 | Mis ventas activas (asks) | `rpc/viewer_profile_asks?select=*&order=created_at.desc` *(POST, body `{}`)* |
-| Mis arriendos cobrados | `rpc/viewer_payrolls?select=*&order=transaction_timestamped_at.desc&limit=20` *(POST, body `{}`)* |
+| Mis arriendos cobrados | `rpc/viewer_payrolls?select=*&order=transaction_timestamped_at.desc&limit=20` *(POST, body `{}`; requiere headers adicionales)* |
 | Mis retiros | `rpc/viewer_profile_withdrawals?select=*&order=created_at.desc&limit=20` *(POST, body `{}`)* |
 | Mis depósitos | `rpc/viewer_profile_charges?select=*&order=created_at.desc&limit=20` *(POST, body `{}`)* |
 | Mercado: asks más baratos de una unidad | `secondary_market_orders?order_type=eq.ask&unit_id=eq.<ID>&order=token_price.asc&limit=5` |
@@ -217,6 +217,27 @@ La RLS scopea automáticamente "lo tuyo", pero para recursos del usuario **prefi
 > Para recursos del usuario, evita `profiles`, `profile_bank_accounts`, `profile_asks`,
 > `purchase_confirmations_pnls`, `profile_withdrawals` y `profile_charges` directos.
 
+### Headers requeridos para algunas funciones
+
+Algunos RPC (`viewer_payrolls`, y posiblemente otros) **requieren headers adicionales** además de `apikey` y `Authorization`:
+
+```bash
+curl -sS -X POST "$SUPABASE_URL/rest/v1/rpc/viewer_payrolls?select=*&order=transaction_timestamped_at.desc&limit=20" \
+  -H "apikey: $KEY" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "content-type: application/json" \
+  -H "content-profile: public" \
+  -H "prefer: return=representation" \
+  -H "x-client-info: supabase-js/2.4.0" \
+  -d '{}' | jq
+```
+
+**Sin estos headers, la función retorna un array vacío `[]` sin error**, lo que silencia fallos RLS. Siempre incluye:
+
+- `content-profile: public` — especifica el schema público.
+- `prefer: return=representation` — pide la representación completa de lo que se retorna.
+- `x-client-info: supabase-js/2.4.0` — identifica el cliente Supabase.
+
 ### RPC curados (POST)
 
 Algunos atajos de la app son funciones. Se llaman con POST y cuerpo `{}` (o args). Úsalas como
@@ -224,7 +245,7 @@ primera opción cuando exista `viewer_*`:
 
 ```bash
 SUPABASE_URL="https://api.fraccional.app"
-KEY="sb_publishable_pthBDDoTGZc7PxwqrIHn1Q_-wZ_ZY6c"
+KEY="sb_publishable_zsc5qocAVfPLJnD9IOHrpw_mtUlCg-7"
 SESSION="$HOME/.fraccional/session.json"
 TOKEN=$(jq -r '.access_token' "$SESSION")
 
@@ -238,7 +259,7 @@ Con argumentos:
 
 ```bash
 SUPABASE_URL="https://api.fraccional.app"
-KEY="sb_publishable_pthBDDoTGZc7PxwqrIHn1Q_-wZ_ZY6c"
+KEY="sb_publishable_zsc5qocAVfPLJnD9IOHrpw_mtUlCg-7"
 SESSION="$HOME/.fraccional/session.json"
 TOKEN=$(jq -r '.access_token' "$SESSION")
 
