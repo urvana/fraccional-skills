@@ -3,7 +3,7 @@ name: fraccional
 description: Operate your Fraccional (fraccional.cl) real-estate investment account from the terminal — log in with an email code, view your portfolio, movements, valuations, rent payrolls and the secondary market, and run read queries against the Fraccional API with curl. Use when the user mentions Fraccional, fraccional.cl, or their investments / fractions / portfolio / "mis inversiones" / "mi portafolio" there.
 metadata:
   author: urvana
-  version: "0.1.1"
+  version: "0.1.2"
 ---
 
 # Fraccional desde la terminal
@@ -197,25 +197,30 @@ La RLS scopea automáticamente "lo tuyo", pero para recursos del usuario **prefi
 | Intención | Endpoint |
 |---|---|
 | Mi perfil | `rpc/viewer_profile` *(POST, body `{}`)* |
-| Mis movimientos / PnL | `rpc/viewer_purchase_confirmations_pnls?select=*&order=confirmed_at.desc&limit=20` *(POST, body `{}` o con args)* |
-| Resumen portafolio por moneda | `profile_portfolio_summary_by_currency?select=*` |
+| Mis movimientos / PnL | `rpc/viewer_purchase_confirmations_pnls?select=purchase_confirmation_id,unit_id,confirmed_at,status,bid_token_quantity,bid_preferred_amount,bid_preferred_currency,original_investment,current_value,pnl_amount,pnl_percentage&order=confirmed_at.desc&limit=20` *(POST, body `{}` o con `{"indicator_id":"CLP"}`)* |
+| Resumen portafolio por moneda | `profile_portfolio_summary_by_currency?select=profile_id,valuation_currency,currency_amount,amount_clp` |
+| **% propiedad en una unidad** | `purchase_confirmations_portfolios_pct?select=profile_id,unit_id,bid_token_quantity,pct&profile_id=eq.<PROFILE_ID>` *(filtra por `unit_id=eq.<ID>` para una sola; `pct` = fracción del total de tokens)* |
 | Mis cuentas bancarias | `rpc/viewer_profile_bank_accounts?select=*` *(POST, body `{}`)* |
-| Mis ventas activas (asks) | `rpc/viewer_profile_asks?select=*&order=created_at.desc` *(POST, body `{}`)* |
-| Mis arriendos cobrados | `rpc/viewer_payrolls?select=*&order=transaction_timestamped_at.desc&limit=20` *(POST, body `{}`; requiere headers adicionales)* |
-| Mis retiros | `rpc/viewer_profile_withdrawals?select=*&order=created_at.desc&limit=20` *(POST, body `{}`)* |
-| Mis depósitos | `rpc/viewer_profile_charges?select=*&order=created_at.desc&limit=20` *(POST, body `{}`)* |
-| Mercado: asks más baratos de una unidad | `secondary_market_orders?order_type=eq.ask&unit_id=eq.<ID>&order=token_price.asc&limit=5` |
-| Mercado: mejores bids de una unidad | `secondary_market_orders?order_type=eq.bid&unit_id=eq.<ID>&order=token_price.desc&limit=5` |
-| Mejores ofertas (oportunidades) | `rpc/profile_asks_summary_grouped_as?select=*&reference_diff_pct=lt.0&order=reference_diff_pct.asc&limit=20` *(POST, body `{"indicator_id":"CLP"}`)* |
-| Propiedades / unidades | `units?select=id,name,slug,published_at,funding_amount_currency_virtual,is_sold_out&disabled=eq.false&published_at=not.is.null&order=published_at.desc&limit=20` |
+| Mis ventas activas (asks) | `rpc/viewer_profile_asks?select=profile_ask_id,unit_id,token_price,currency,ask_public_serial,created_at,cancelled_at&order=created_at.desc` *(POST, body `{}`)* |
+| Mis arriendos cobrados | `rpc/viewer_payrolls?select=payroll_year,payroll_month,payroll_unit_id,transaction_amount,indicator_id,transaction_timestamped_at,payroll_reinvest_toggled&order=transaction_timestamped_at.desc&limit=20` *(POST, body `{}`; requiere headers adicionales; `indicator_id` = moneda)* |
+| Mis retiros | `rpc/viewer_profile_withdrawals?select=profile_withdrawal_id,withdrawal_amount,withdrawal_currency,withdrawal_at,profile_withdrawal_type,unit_id&order=withdrawal_at.desc&limit=20` *(POST, body `{}`)* |
+| Mis depósitos | `rpc/viewer_profile_charges?select=id,result_amount,result_currency,result_status,created_at&order=created_at.desc&limit=20` *(POST, body `{}`)* |
+| Mercado: asks más baratos de una unidad | `secondary_market_orders?select=order_id,unit_id,order_type,order_amount,order_token_quantity,order_remaining_budget,currency,token_price,created_at&order_type=eq.ask&unit_id=eq.<ID>&order=token_price.asc&limit=5` *(nota: `token_price` = precio por fracción; `order_amount` = monto total de la orden)* |
+| Mercado: mejores bids de una unidad | `secondary_market_orders?select=order_id,unit_id,order_type,order_amount,order_token_quantity,order_remaining_budget,currency,token_price,created_at&order_type=eq.bid&unit_id=eq.<ID>&order=token_price.desc&limit=5` |
+| Mejores ofertas (oportunidades) | `rpc/profile_asks_summary_grouped_as?select=unit_id,currency,asks_count,token_quantity,asked_amount,reference_diff_pct,first_ask_public_serial&reference_diff_pct=lt.0&order=reference_diff_pct.asc&limit=20` *(POST, body `{"indicator_id":"CLP"}`)* |
+| Propiedades / unidades | `units?select=id,name,slug,published_at,is_sold_out,rent_state&disabled=eq.false&published_at=not.is.null&order=published_at.desc&limit=20` |
 | Detalle de una unidad | `units?id=eq.<ID>&disabled=eq.false&published_at=not.is.null&select=*` |
-| Arriendos de una unidad | `unit_rentals?unit_id=eq.<ID>&select=*&order=year_number.desc,month_number.desc,rent_nonce.desc` |
-| Valuaciones de una unidad | `unit_valuations?unit_id=eq.<ID>&select=*&order=created_at.desc` |
+| Arriendos de una unidad | `unit_rentals?unit_id=eq.<ID>&select=id,unit_id,year_number,month_number,rent_nonce,rent_current_amount,rent_current_currency,rent_expected_amount,rent_expected_currency,rent_payment_date,confirmed_at&order=year_number.desc,month_number.desc,rent_nonce.desc` |
+| **Valor actual de una unidad** | `unit_valuations?unit_id=eq.<ID>&select=id,unit_id,valuation_amount,valuation_currency,valuation_at,valuation_irr_expected_pct&order=valuation_at.desc&limit=1` *(primera fila = valuación vigente; usar siempre en vez de `funding_amount`/`funding_currency`)* |
+| Historial de valuaciones | `unit_valuations?unit_id=eq.<ID>&select=id,unit_id,valuation_amount,valuation_currency,valuation_at,valuation_irr_expected_pct&order=valuation_at.desc` |
 
 > `units` usa PK **`id`**; las tablas relacionadas la referencian como **`unit_id`**.
 > En `units`, incluye siempre `published_at=not.is.null`.
 > Para recursos del usuario, evita `profiles`, `profile_bank_accounts`, `profile_asks`,
 > `purchase_confirmations_pnls`, `profile_withdrawals` y `profile_charges` directos.
+> **Valor de una unidad** → `unit_valuations` con `order=valuation_at.desc&limit=1`. Nunca usar `funding_amount` ni `funding_currency` directamente.
+> **% de propiedad** de un usuario en una unidad → vista `purchase_confirmations_portfolios_pct`;
+> campo `pct` = `bid_token_quantity / tokens_disponibles`. Filtra `profile_id=eq.<ID>` y opcionalmente `unit_id=eq.<ID>`.
 
 ### Headers requeridos para algunas funciones
 
