@@ -43,14 +43,34 @@ SESSION="$HOME/.fraccional/session.json"
 
 ---
 
-## Login (Email OTP) — recomendado
+## Iniciar sesión
+
+Dos formas; **ambas terminan en el _Paso final_** (verificar). En las dos, el usuario obtiene un
+**código de 6 dígitos** que pega aquí — nunca su contraseña.
+
+- **A. Navegador (recomendado):** abre una página, inicia sesión como siempre (email o
+  Google/Facebook/LinkedIn) y copia el código. Nada de su email/clave pasa por el agente.
+- **B. Código al email (curl puro):** pide el código de 6 dígitos al email de la cuenta.
+
+### Opción A — navegador (`/app/cli`)
+
+1. Abre la página de conexión:
+
+   ```bash
+   open "https://www.fraccional.cl/app/cli" 2>/dev/null \
+     || echo "Abre https://www.fraccional.cl/app/cli en tu navegador"
+   ```
+
+2. Dile al usuario: inicia sesión (o ya lo estás) y pulsa **Generar código para la CLI**. La
+   página muestra un **código de 6 dígitos** y tu email.
+3. Pregúntale ese **código** y su **email**, y ve al **Paso final**. Crea una sesión
+   **independiente** (no cierra la sesión web).
+
+### Opción B — código al email
 
 Funciona para **todos** los usuarios (incluidos los de Google/Facebook/LinkedIn): el código
-llega al email de la cuenta. No usa contraseña → nada sensible pasa por el agente.
-
-### Paso 1 — pedir el código
-
-Pregunta el email al usuario y envíalo. `create_user:false` evita crear cuentas nuevas.
+llega al email de la cuenta. Pregunta el email al usuario y envíalo (`create_user:false` evita
+crear cuentas nuevas):
 
 ```bash
 SUPABASE_URL="https://api.fraccional.app"
@@ -65,13 +85,13 @@ curl -sS -X POST "$SUPABASE_URL/auth/v1/otp" \
            else "✓ Código enviado a '"$EMAIL"'. Revisa tu correo." end'
 ```
 
-El correo trae un **código de 6 dígitos** o un **enlace mágico**. Sirven ambos (ver Paso 2).
+El correo trae un **código de 6 dígitos** (y un enlace de respaldo). Ve al **Paso final**.
 
-### Paso 2 — verificar y guardar la sesión
+### Paso final — verificar y guardar la sesión
 
-Pide al usuario el código (o que pegue el enlace completo del correo). Este mismo bloque sirve
-para el código del email, el código de `/cli`, y los enlaces mágicos: prueba las variantes de
-`type` hasta que una funcione.
+Pide al usuario el **código de 6 dígitos** (de la página `/app/cli` o del correo) y su **email**.
+Este bloque también acepta el enlace mágico completo: prueba las variantes de `type` hasta que una
+funcione.
 
 ```bash
 SUPABASE_URL="https://api.fraccional.app"
@@ -106,24 +126,9 @@ if [ -n "$(jq -r '.access_token // empty' "$SESSION" 2>/dev/null)" ]; then
   echo "✓ Sesión iniciada como $(jq -r '.email' "$SESSION")"
 else
   rm -f "$SESSION"
-  echo "✗ No se pudo verificar. Revisa el código/enlace o reenvía el código (Paso 1)."
+  echo "✗ No se pudo verificar. Revisa el código/enlace o pide uno nuevo (Opción A o B)."
 fi
 unset INPUT HASH
-```
-
-## Login por navegador (paste-code, tipo `/login`)
-
-Para quien prefiere autenticarse en el navegador (reusa su sesión web / OAuth, sin escribir email
-ni código). Requiere que la página `/cli` esté desplegada.
-
-1. Abre **https://www.fraccional.cl/app/cli** (`open` en macOS).
-2. El usuario inicia sesión (o ya lo está) y pulsa **Generar código**. La página muestra un
-   **código** (y un enlace de respaldo) + su email.
-3. Pega ese código (o el enlace) en el **Paso 2** de arriba — el bloque detecta el tipo solo.
-   Se guarda una sesión **independiente** (no cierra la sesión web).
-
-```bash
-open "https://www.fraccional.cl/app/cli" 2>/dev/null || echo "Abre https://www.fraccional.cl/app/cli en tu navegador"
 ```
 
 ---
@@ -257,6 +262,6 @@ PostgREST también escribe. **Confirma con el usuario antes de ejecutar** cualqu
 | `column X does not exist` | Mira el `hint`; usa `select=*&limit=1` para ver columnas reales. |
 | `404` en una tabla | No existe o no está expuesta en `public`. Verifica el nombre. |
 | Respuesta vacía `[]` | RLS: no tienes filas para ese recurso (esperado si no es tuyo). |
-| `Código enviado` pero no llega | Revisa spam; el remitente es Fraccional. Reintenta el Paso 1. |
-| `Signups not allowed for otp` | El email no está registrado en Fraccional, o el OTP por email está desactivado. Verifica el correo o usa el *Login por navegador* (`/cli`). |
+| `Código enviado` pero no llega | Revisa spam; el remitente es Fraccional. Reintenta la *Opción B*. |
+| `Signups not allowed for otp` | El email no está registrado en Fraccional, o el OTP por email está desactivado. Verifica el correo o usa la *Opción A* (`/app/cli`). |
 | `jq: command not found` | `brew install jq`. |
