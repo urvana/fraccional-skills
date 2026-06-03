@@ -3,7 +3,7 @@ name: fraccional
 description: Operate your Fraccional (fraccional.cl) real-estate investment account from the terminal — log in with an email code, view your portfolio, movements, valuations, rent payrolls and the secondary market, and run read queries against the Fraccional API with curl. Use when the user mentions Fraccional, fraccional.cl, or their investments / fractions / portfolio / "mis inversiones" / "mi portafolio" there.
 metadata:
   author: urvana
-  version: "0.1.0"
+  version: "0.1.1"
 ---
 
 # Fraccional desde la terminal
@@ -165,8 +165,9 @@ fi
 
 ## Correr una query (genérico)
 
-Patrón base: lee el token del archivo, llama a PostgREST, muestra JSON. Cambia el path/filtros
-según el *Catálogo* de abajo. (Corre primero el bloque de refrescar.)
+Patrón base: lee el token del archivo, llama a PostgREST, muestra JSON. Para recursos scopeados al
+usuario, **prefiere `viewer_*` y funciones curadas** en vez de tablas raw. (Corre primero el bloque
+de refrescar.)
 
 ```bash
 SUPABASE_URL="https://api.fraccional.app"
@@ -174,8 +175,9 @@ KEY="sb_publishable_pthBDDoTGZc7PxwqrIHn1Q_-wZ_ZY6c"
 SESSION="$HOME/.fraccional/session.json"
 TOKEN=$(jq -r '.access_token' "$SESSION")
 
-curl -sS "$SUPABASE_URL/rest/v1/profiles?select=*" \
-  -H "apikey: $KEY" -H "Authorization: Bearer $TOKEN" | jq
+curl -sS -X POST "$SUPABASE_URL/rest/v1/rpc/viewer_profile" \
+  -H "apikey: $KEY" -H "Authorization: Bearer $TOKEN" \
+  -H "content-type: application/json" -d '{}' | jq
 unset TOKEN
 ```
 
@@ -189,28 +191,36 @@ rm -f "$HOME/.fraccional/session.json" && echo "✓ sesión cerrada"
 
 ## Catálogo de queries típicas (PostgREST `/rest/v1`)
 
-La RLS scopea automáticamente "lo tuyo": consultar `profiles` o `purchase_confirmations_pnls`
-ya devuelve solo tus filas. Reemplaza el `?path?query` del bloque genérico por:
+La RLS scopea automáticamente "lo tuyo", pero para recursos del usuario **prefiere funciones
+`viewer_*`** en vez de tablas raw. Reemplaza el `?path?query` del bloque genérico por:
 
 | Intención | Endpoint |
 |---|---|
-| Mi perfil (curado) | `rpc/viewer_profile` *(POST, ver abajo)* |
-| Mi perfil (tabla) | `profiles?select=*` |
-| Mis movimientos / PnL | `purchase_confirmations_pnls?select=*&order=confirmed_at.desc&limit=20` |
+| Mi perfil | `rpc/viewer_profile` *(POST, body `{}`)* |
+| Mis movimientos / PnL | `rpc/viewer_purchase_confirmations_pnls?select=*&order=confirmed_at.desc&limit=20` *(POST, body `{}` o con args)* |
 | Resumen portafolio por moneda | `profile_portfolio_summary_by_currency?select=*` |
-| Mis cuentas bancarias | `profile_bank_accounts?select=*` |
-| Mis ventas activas (asks) | `profile_asks?select=*` |
+| Mis cuentas bancarias | `rpc/viewer_profile_bank_accounts?select=*` *(POST, body `{}`)* |
+| Mis ventas activas (asks) | `rpc/viewer_profile_asks?select=*&order=created_at.desc` *(POST, body `{}`)* |
+| Mis arriendos cobrados | `rpc/viewer_payrolls?select=*&order=transaction_timestamped_at.desc&limit=20` *(POST, body `{}`)* |
+| Mis retiros | `rpc/viewer_profile_withdrawals?select=*&order=created_at.desc&limit=20` *(POST, body `{}`)* |
+| Mis depósitos | `rpc/viewer_profile_charges?select=*&order=created_at.desc&limit=20` *(POST, body `{}`)* |
 | Mercado: asks más baratos de una unidad | `secondary_market_orders?order_type=eq.ask&unit_id=eq.<ID>&order=token_price.asc&limit=5` |
 | Mercado: mejores bids de una unidad | `secondary_market_orders?order_type=eq.bid&unit_id=eq.<ID>&order=token_price.desc&limit=5` |
-| Propiedades / unidades | `units?select=id,name,slug,funding_currency,funding_amount,is_sold_out,rent_state&order=published_at.desc&limit=20` |
-| Detalle de una unidad | `units?id=eq.<ID>&select=*` |
+| Mejores ofertas (oportunidades) | `rpc/profile_asks_summary_grouped_as?select=*&reference_diff_pct=lt.0&order=reference_diff_pct.asc&limit=20` *(POST, body `{"indicator_id":"CLP"}`)* |
+| Propiedades / unidades | `units?select=id,name,slug,published_at,funding_amount_currency_virtual,is_sold_out&disabled=eq.false&published_at=not.is.null&order=published_at.desc&limit=20` |
+| Detalle de una unidad | `units?id=eq.<ID>&disabled=eq.false&published_at=not.is.null&select=*` |
+| Arriendos de una unidad | `unit_rentals?unit_id=eq.<ID>&select=*&order=year_number.desc,month_number.desc,rent_nonce.desc` |
 | Valuaciones de una unidad | `unit_valuations?unit_id=eq.<ID>&select=*&order=created_at.desc` |
 
 > `units` usa PK **`id`**; las tablas relacionadas la referencian como **`unit_id`**.
+> En `units`, incluye siempre `published_at=not.is.null`.
+> Para recursos del usuario, evita `profiles`, `profile_bank_accounts`, `profile_asks`,
+> `purchase_confirmations_pnls`, `profile_withdrawals` y `profile_charges` directos.
 
 ### RPC curados (POST)
 
-Algunos atajos de la app son funciones. Se llaman con POST y cuerpo `{}` (o args):
+Algunos atajos de la app son funciones. Se llaman con POST y cuerpo `{}` (o args). Úsalas como
+primera opción cuando exista `viewer_*`:
 
 ```bash
 SUPABASE_URL="https://api.fraccional.app"
@@ -221,6 +231,22 @@ TOKEN=$(jq -r '.access_token' "$SESSION")
 curl -sS -X POST "$SUPABASE_URL/rest/v1/rpc/viewer_profile" \
   -H "apikey: $KEY" -H "Authorization: Bearer $TOKEN" \
   -H "content-type: application/json" -d '{}' | jq
+unset TOKEN
+```
+
+Con argumentos:
+
+```bash
+SUPABASE_URL="https://api.fraccional.app"
+KEY="sb_publishable_pthBDDoTGZc7PxwqrIHn1Q_-wZ_ZY6c"
+SESSION="$HOME/.fraccional/session.json"
+TOKEN=$(jq -r '.access_token' "$SESSION")
+
+curl -sS -X POST \
+  "$SUPABASE_URL/rest/v1/rpc/profile_asks_summary_grouped_as?reference_diff_pct=lt.0&order=reference_diff_pct.asc&limit=20" \
+  -H "apikey: $KEY" -H "Authorization: Bearer $TOKEN" \
+  -H "content-type: application/json" \
+  -d '{"indicator_id":"CLP"}' | jq
 unset TOKEN
 ```
 
@@ -252,6 +278,8 @@ PostgREST también escribe. **Confirma con el usuario antes de ejecutar** cualqu
 - Funciones de la app (curadas): `POST /rest/v1/rpc/<fn>`, p.ej.
   `rpc/viewer_profile_ask_cancel` (cancelar una venta), `rpc/viewer_activate_promo_code`
   (activar código). Pasa los argumentos en el cuerpo JSON.
+- Re-inversiones: no hagas update in-place; inserta una nueva fila en `profile_settings_reinvests`
+  porque es una serie temporal. El estado vigente se lee con `rpc/viewer_profile_settings_reinvests`.
 
 ## Troubleshooting
 
